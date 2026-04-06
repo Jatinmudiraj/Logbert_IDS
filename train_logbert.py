@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -6,8 +7,17 @@ from log_dataset import LogSequenceDataset, DataLoader, collate_fn
 from log_parser import LogParser
 import json
 
-def train_logbert(log_file, epochs=10, batch_size=32, lr=0.001):
+def train_logbert(log_file, epochs=5, batch_size=32, lr=0.001):
+    # Use relative paths
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(base_dir, 'logbert_model.pth')
+    meta_path = os.path.join(base_dir, 'parser_meta.json')
+    
     # Load Logs
+    if not os.path.exists(log_file):
+        print(f"[!] Log file not found: {log_file}")
+        return
+        
     with open(log_file, 'r', errors='ignore') as f:
         logs = f.readlines()
     
@@ -32,47 +42,43 @@ def train_logbert(log_file, epochs=10, batch_size=32, lr=0.001):
     
     # Training Loop
     model.train()
+    print(f"[*] Starting training on {log_file} for {epochs} epochs...")
     for epoch in range(epochs):
         total_loss = 0
         for i, (seq, labels) in enumerate(dataloader):
             optimizer.zero_grad()
-            
-            # Forward pass
-            logits, dist_h = model(seq) # logits: (batch, seq, vocab), dist_h: (batch, d_model)
-            
-            # MLKP Loss: Only for masked items (mask token is 0)
-            # Find indices where seq is 0
+            logits, dist_h = model(seq)
             mask_indices = (seq == 0).nonzero(as_tuple=True)
             if mask_indices[0].numel() > 0:
-                masked_logits = logits[mask_indices] # (num_mask, vocab)
-                masked_labels = labels[mask_indices] # (num_mask)
+                masked_logits = logits[mask_indices]
+                masked_labels = labels[mask_indices]
                 loss_mlkp = ce_loss(masked_logits, masked_labels)
             else:
                 loss_mlkp = torch.tensor(0.0, requires_grad=True)
-                
-            # VHM Loss
+            
             loss_vhm = model.get_vhm_loss(dist_h)
-            
-            # Combine Losses
             loss = loss_mlkp + 0.1 * loss_vhm
-            
             loss.backward()
             optimizer.step()
-            
             total_loss += loss.item()
             
         print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(dataloader):.4f}")
         
     # Save Model and Parser metadata
-    torch.save(model.state_dict(), '/raid/home/geeta/geeta/LogBERT_IDS/logbert_model.pth')
-    with open('/raid/home/geeta/geeta/LogBERT_IDS/parser_meta.json', 'w') as f:
+    torch.save(model.state_dict(), model_path)
+    with open(meta_path, 'w') as f:
         json.dump({
             "templates": parser.templates,
             "template_to_id": parser.template_to_id,
             "vocab_size": vocab_size
         }, f)
         
-    print("Training Complete! Saved model and parser metadata.")
+    print(f"Training Complete! Model saved at {model_path}")
 
 if __name__ == "__main__":
-    train_logbert('/raid/home/geeta/geeta/all_logs_consolidated/ssh.log', epochs=5)
+    import argparse
+    parser = argparse.ArgumentParser(description='LogBERT Training')
+    parser.add_argument('--file', type=str, required=True, help='Path to training log file')
+    args = parser.parse_args()
+    
+    train_logbert(args.file)
