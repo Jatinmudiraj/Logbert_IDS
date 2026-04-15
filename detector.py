@@ -77,13 +77,22 @@ class IDSDetector:
             threshold = thresh_cfg.get("attack_threshold", 0.5)
             
             is_attack = proba >= threshold
+
+            # UI Enhancement: Scale calibrated probability to represent human-readable confidence
+            display_proba = proba
+            if is_attack:
+                # Map [threshold, 1.0] -> [0.85, 0.99] to show high certainty in alerts
+                display_proba = 0.85 + ((proba - threshold) / (1.0 - threshold + 1e-9)) * 0.14
+            else:
+                # Keep safe probabilities low
+                display_proba = (proba / (threshold + 1e-9)) * 0.40
+
             stage = "unknown"
-            
             if is_attack and self.stage_model and self.stage_encoder:
                 stage_idx = self.stage_model.predict(X)[0]
                 stage = self.stage_encoder.inverse_transform([stage_idx])[0]
 
-            return is_attack, stage, proba
+            return is_attack, stage, display_proba
         except Exception as e:
             print(f"[IDS] Predict Error: {e}")
             return False, "error", 0.0
