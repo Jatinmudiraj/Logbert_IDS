@@ -63,22 +63,25 @@ def detect_anomalies(log_file=None, g=5, distance_threshold=2.0, live=False, use
         print(f"[ERROR] Log source unreachable: {log_file}", flush=True)
         return
 
-    sequence_buffer = []
-    ema_dist = distance_threshold
-    alpha = 0.2
+    log_string_buffer = []
 
     print("=" * 60, flush=True)
-    print(f" LOGBERT IDS ENGINE ACTIVE", flush=True)
+    print(f" LOGBERT IDS | NEURAL THREAT INTELLIGENCE ACTIVE", flush=True)
     print("=" * 60, flush=True)
 
     def process_line(line):
-        nonlocal sequence_buffer, ema_dist
+        nonlocal sequence_buffer, ema_dist, log_string_buffer
         if not line or line.strip() == "": return
-        print(f" [ANALYZING] {line.strip()}", flush=True)
         
+        raw_line = line.strip()
         cleaned = clean_log(line)
         log_id = template_to_id.get(cleaned, 0)
+        
         sequence_buffer.append(log_id)
+        log_string_buffer.append(raw_line)
+        
+        # Calculate current context stats
+        current_conf = 100.0
         
         if len(sequence_buffer) >= 10:
             seq = [dist_token] + sequence_buffer[-10:]
@@ -96,20 +99,32 @@ def detect_anomalies(log_file=None, g=5, distance_threshold=2.0, live=False, use
                 actual_token = sequence_buffer[-1]
                 actual_prob = probs[actual_token].item() if actual_token != 0 else 0
                 
-                confidence_level = None
-                reason = ""
-                if actual_token not in top_indices and actual_prob < 0.001 and current_dist > distance_threshold * 2:
-                    confidence_level = "CRITICAL"
-                    reason = "Structural deviation"
-                elif actual_token not in top_indices and actual_prob < 0.01:
-                    confidence_level = "HIGH"
-                    reason = "Unrecognized sequence"
-                
-                if confidence_level:
-                    attack_type = classifier.classify(line)
-                    print(f"\n[ALERT - {confidence_level}] Threat: {attack_type} | Prob: {actual_prob:.4f}", flush=True)
+                # Dynamic Confidence Calculation
+                current_conf = max(0, 100 - (current_dist * 5))
+                if actual_token not in top_indices:
+                    current_conf *= (actual_prob + 0.1)
 
-        if len(sequence_buffer) > 50: sequence_buffer = sequence_buffer[-10:]
+                confidence_level = None
+                if actual_token not in top_indices and actual_prob < 0.005 and current_dist > distance_threshold * 1.5:
+                    confidence_level = "CRITICAL"
+                elif actual_token not in top_indices and actual_prob < 0.05:
+                    confidence_level = "HIGH"
+                
+                print(f" [ANALYZING] {raw_line[:100]}... | CONFIDENCE: {current_conf:.2f}%", flush=True)
+
+                if confidence_level:
+                    attack_type = classifier.classify(raw_line)
+                    print(f"\n[DETECTED - {confidence_level}] THREAT: {attack_type}", flush=True)
+                    print(f" > PROBABILITY: {actual_prob*100:.4f}% | DISTANCE: {current_dist:.2f}", flush=True)
+                    print(f" > ATTACK WINDOW:", flush=True)
+                    for idx, l in enumerate(log_string_buffer[-10:]):
+                        prefix = ">>> " if idx == 9 else "    "
+                        print(f"{prefix}{l}", flush=True)
+                    print("-" * 40, flush=True)
+
+        if len(sequence_buffer) > 50: 
+            sequence_buffer = sequence_buffer[-10:]
+            log_string_buffer = log_string_buffer[-10:]
 
     if use_stdin:
         print("[*] MODE: STDIN (Piped logs)", flush=True)

@@ -3,131 +3,216 @@ from tkinter import ttk, scrolledtext, messagebox
 import threading
 import subprocess
 import os
-import json
 import time
 
-class IDSGui:
+class CyberIDS:
     def __init__(self, root):
         self.root = root
-        self.root.title("LogBERT IDS | Ultra-Premium Security Hub")
-        self.root.geometry("1200x850")
-        self.root.configure(bg="#010409")
+        self.root.title("LOGBERT | Neural Cyber-Security Intelligence")
+        self.root.geometry("1400x900")
+        self.root.configure(bg="#0b0e14")
         
         self.colors = {
-            "bg": "#010409", "panel": "#0d1117", "border": "#30363d",
-            "text": "#c9d1d9", "dim": "#8b949e", "accent": "#58a6ff",
-            "success": "#238636", "warning": "#ffa657", "danger": "#ff7b72"
+            "bg": "#0b0e14", "card": "#151921", "accent": "#00d4ff",
+            "critical": "#ff3e3e", "high": "#ff9f1c", "text": "#e0e0e0",
+            "dim": "#707880", "success": "#2ecc71"
         }
 
         self.setup_ui()
         self.monitoring = False
         self.process = None
+        self.log_count = 0
+        self.threat_count = 0
 
     def setup_ui(self):
-        # Header
-        header = tk.Frame(self.root, bg="#161b22", height=80)
-        header.pack(fill=tk.X)
-        header.pack_propagate(False)
-        tk.Label(header, text="NEURAL ARMOR", font=("Segoe UI", 24, "bold"), fg="white", bg="#161b22").pack(side=tk.LEFT, padx=30)
+        # Header / HUD
+        hud = tk.Frame(self.root, bg="#1a202c", height=100)
+        hud.pack(fill=tk.X)
+        hud.pack_propagate(False)
+
+        tk.Label(hud, text="LOGBERT", font=("Impact", 36), fg=self.colors["accent"], bg="#1a202c").pack(side=tk.LEFT, padx=40)
+        tk.Label(hud, text="NEURAL DEFENSE COMMAND", font=("Arial", 12, "bold"), fg=self.colors["dim"], bg="#1a202c").pack(side=tk.LEFT, pady=(20, 0))
+
+        self.sys_status = tk.Label(hud, text="● ENGINE STANDBY", font=("Consolas", 14, "bold"), fg=self.colors["dim"], bg="#1a202c")
+        self.sys_status.pack(side=tk.RIGHT, padx=40)
+
+        # Body Layout
+        body = tk.Frame(self.root, bg=self.colors["bg"])
+        body.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
+
+        # Left Column (Metrics & Controls)
+        left = tk.Frame(body, bg=self.colors["bg"], width=300)
+        left.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 20))
+        left.pack_propagate(False)
+
+        self.create_control_panel(left)
+        self.create_metrics_panel(left)
+
+        # Center Column (Live Feed)
+        center = tk.Frame(body, bg=self.colors["bg"])
+        center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Live Feed Panel
+        feed_frame = tk.Frame(center, bg=self.colors["card"], bd=1, relief=tk.FLAT)
+        feed_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        tk.Label(feed_frame, text=" LIVE NEURAL TELEMETRY", font=("Consolas", 10, "bold"), fg=self.colors["accent"], bg=self.colors["card"]).pack(anchor=tk.W, padx=15, pady=10)
         
-        # Main Layout
-        content = tk.Frame(self.root, bg="#010409")
-        content.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        self.console = scrolledtext.ScrolledText(feed_frame, bg="#000000", fg="#00ff41", font=("Consolas", 10), bd=0, padx=15, pady=10)
+        self.console.pack(fill=tk.BOTH, expand=True)
 
-        # Left Config Panel
-        config = tk.Frame(content, bg="#0d1117", width=300, bd=1, relief=tk.FLAT)
-        config.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 20))
-        config.pack_propagate(False)
-
-        tk.Label(config, text="CONFIGURATION", font=("Segoe UI", 10, "bold"), fg="#8b949e", bg="#0d1117").pack(pady=20)
+        # Window View (Context)
+        window_frame = tk.Frame(center, bg=self.colors["card"], height=250)
+        window_frame.pack(fill=tk.X)
+        window_frame.pack_propagate(False)
+        tk.Label(window_frame, text=" DETECTED ATTACK WINDOW (SLIDING-10 CONTEXT)", font=("Consolas", 10, "bold"), fg=self.colors["high"], bg=self.colors["card"]).pack(anchor=tk.W, padx=15, pady=5)
         
-        tk.Label(config, text="Log Source", fg="white", bg="#0d1117").pack(anchor=tk.W, padx=20)
-        self.source_var = tk.StringVar(value="journalctl (Modern)")
-        source_menu = ttk.Combobox(config, textvariable=self.source_var, values=["/var/log/auth.log", "journalctl (Modern)", "Simulation Mode"])
-        source_menu.pack(fill=tk.X, padx=20, pady=10)
+        self.window_text = tk.Text(window_frame, bg="#0d1117", fg="#c9d1d9", font=("Consolas", 9), bd=0, padx=15, pady=10)
+        self.window_text.pack(fill=tk.BOTH, expand=True)
 
-        self.btn_toggle = tk.Button(config, text="ENGAGE ENGINE", command=self.toggle_engine, bg="#238636", fg="white", font=("Segoe UI", 11, "bold"), relief=tk.FLAT, pady=10)
-        self.btn_toggle.pack(fill=tk.X, padx=20, pady=20)
+        # Right Column (Threat Vault)
+        right = tk.Frame(body, bg=self.colors["card"], width=400)
+        right.pack(side=tk.LEFT, fill=tk.Y, padx=(20, 0))
+        right.pack_propagate(False)
 
-        self.debug_btn = tk.Button(config, text="VIEW ENGINE ERRORS", command=self.show_debug, bg="#30363d", fg="white", relief=tk.FLAT)
-        self.debug_btn.pack(fill=tk.X, padx=20, pady=5)
+        tk.Label(right, text=" THREAT INTELLIGENCE LOG", font=("Consolas", 10, "bold"), fg=self.colors["critical"], bg=self.colors["card"]).pack(anchor=tk.W, padx=15, pady=15)
+        
+        style = ttk.Style()
+        style.configure("Custom.Treeview", background="#1a202c", foreground="white", fieldbackground="#1a202c", rowheight=30)
+        self.tree = ttk.Treeview(right, columns=("ID", "Type"), show='headings', style="Custom.Treeview")
+        self.tree.heading("ID", text="TIME")
+        self.tree.heading("Type", text="THREAT CLASS")
+        self.tree.column("ID", width=100)
+        self.tree.column("Type", width=250)
+        self.tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Right Console Panel
-        right = tk.Frame(content, bg="#010409")
-        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    def create_control_panel(self, parent):
+        cp = tk.Frame(parent, bg=self.colors["card"], pady=20)
+        cp.pack(fill=tk.X)
+        
+        tk.Label(cp, text="ENGINE SELECTION", fg=self.colors["dim"], bg=self.colors["card"], font=("Arial", 9, "bold")).pack(anchor=tk.W, padx=20)
+        self.source_var = tk.StringVar(value="journalctl (Live)")
+        s_menu = ttk.Combobox(cp, textvariable=self.source_var, values=["/var/log/auth.log", "journalctl (Live)", "Simulation Mode"])
+        s_menu.pack(fill=tk.X, padx=20, pady=10)
 
-        self.console = scrolledtext.ScrolledText(right, bg="#000000", fg="#00ff00", font=("Consolas", 10), bd=0)
-        self.console.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        self.btn_run = tk.Button(cp, text="ENGAGE ARMOR", command=self.toggle, bg=self.colors["success"], fg="white", font=("Arial", 12, "bold"), relief=tk.FLAT, pady=12)
+        self.btn_run.pack(fill=tk.X, padx=20, pady=10)
 
-        self.tree = ttk.Treeview(right, columns=("Time", "Crit", "Type", "Log"), show='headings', height=10)
-        self.tree.heading("Time", text="TIME")
-        self.tree.heading("Crit", text="SEVERITY")
-        self.tree.heading("Type", text="THREAT")
-        self.tree.heading("Log", text="LOG ENTRY")
-        self.tree.pack(fill=tk.X)
+    def create_metrics_panel(self, parent):
+        mp = tk.Frame(parent, bg=self.colors["card"], pady=20)
+        mp.pack(fill=tk.X, pady=20)
 
-        self.debug_log = []
+        self.logs_var = self.add_metric(mp, "LOGS ANALYZED", "0", self.colors["text"])
+        self.threats_var = self.add_metric(mp, "THREATS NEUTERED", "0", self.colors["critical"])
+        
+        # Confidence Gauge
+        tk.Label(mp, text="NEURAL CONFIDENCE", fg=self.colors["dim"], bg=self.colors["card"], font=("Arial", 9, "bold")).pack(pady=(20, 5))
+        self.gauge = tk.Canvas(mp, width=200, height=100, bg=self.colors["card"], highlightthickness=0)
+        self.gauge.pack()
+        self.gauge.create_arc(20, 20, 180, 180, start=0, extent=180, outline="#333", width=10, style=tk.ARC)
+        self.conf_bar = self.gauge.create_arc(20, 20, 180, 180, start=180, extent=0, outline=self.colors["accent"], width=10, style=tk.ARC)
+        self.conf_val = self.gauge.create_text(100, 80, text="--%", fill="white", font=("Arial", 16, "bold"))
 
-    def toggle_engine(self):
+    def add_metric(self, parent, label, val, color):
+        f = tk.Frame(parent, bg=self.colors["card"], pady=10)
+        f.pack(fill=tk.X, padx=20)
+        tk.Label(f, text=label, font=("Arial", 8, "bold"), fg=self.colors["dim"], bg=self.colors["card"]).pack(anchor=tk.W)
+        v = tk.StringVar(value=val)
+        tk.Label(f, textvariable=v, font=("Arial", 22, "bold"), fg=color, bg=self.colors["card"]).pack(anchor=tk.W)
+        return v
+
+    def toggle(self):
         if not self.monitoring:
-            self.start_engine()
+            self.monitoring = True
+            self.btn_run.config(text="DISENGAGE", bg=self.colors["critical"])
+            self.sys_status.config(text="● DEFENSE ACTIVE", fg=self.colors["success"])
+            threading.Thread(target=self.engine, daemon=True).start()
         else:
-            self.stop_engine()
+            self.monitoring = False
+            self.btn_run.config(text="ENGAGE ARMOR", bg=self.colors["success"])
+            self.sys_status.config(text="● ENGINE STANDBY", fg=self.colors["dim"])
+            if self.process: self.process.terminate()
 
-    def start_engine(self):
-        self.monitoring = True
-        self.btn_toggle.config(text="DISENGAGE", bg="#b62324")
-        self.console.insert(tk.END, "[*] BOOTING NEURAL ENGINE...\n")
-        threading.Thread(target=self.engine_worker, daemon=True).start()
-
-    def stop_engine(self):
-        self.monitoring = False
-        if self.process: self.process.terminate()
-        self.btn_toggle.config(text="ENGAGE ENGINE", bg="#238636")
-
-    def engine_worker(self):
-        proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        py_path = os.path.join(proj_root, 'venv', 'bin', 'python3')
-        main_py = os.path.join(proj_root, 'main.py')
+    def engine(self):
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        py = os.path.join(root_dir, 'venv', 'bin', 'python3')
+        main = os.path.join(root_dir, 'main.py')
         
-        mode = self.source_var.get()
-        if "/var/log" in mode:
-            cmd = [py_path, "-u", main_py, "detect", "--file", "/var/log/auth.log", "--live"]
-        elif "journalctl" in mode:
-            # Piped mode for reliability
-            cmd = f"journalctl -n 20 -f | {py_path} -u {main_py} detect --stdin"
+        src = self.source_var.get()
+        if "journalctl" in src:
+            cmd = f"journalctl -f | {py} -u {main} detect --stdin"
+        elif "/var/log" in src:
+            cmd = [py, "-u", main, "detect", "--file", "/var/log/auth.log", "--live"]
         else:
-            cmd = [py_path, "-u", os.path.join(proj_root, "scripts", "sim_logs.py")]
+            cmd = [py, "-u", os.path.join(root_dir, "scripts", "sim_logs.py")]
 
-        try:
-            if "|" in str(cmd):
-                self.process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-            else:
-                self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        self.process = subprocess.Popen(cmd, shell=(isinstance(cmd, str)), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        
+        in_window = False
+        window_lines = []
+
+        for line in self.process.stdout:
+            if not self.monitoring: break
             
-            for line in self.process.stdout:
-                if not self.monitoring: break
-                self.debug_log.append(line)
-                self.root.after(0, self.update_console, line)
-        except Exception as e:
-            self.debug_log.append(f"CRITICAL ERROR: {str(e)}")
+            # 1. Update Confidence
+            if "CONFIDENCE:" in line:
+                try:
+                    c = float(line.split("CONFIDENCE:")[1].split("%")[0].strip())
+                    self.root.after(0, self.update_gauge, c)
+                    self.log_count += 1
+                    self.logs_var.set(str(self.log_count))
+                    self.console.insert(tk.END, line)
+                    self.console.see(tk.END)
+                except: pass
 
-    def update_console(self, line):
-        if "[ANALYZING]" in line:
-            self.console.insert(tk.END, f" {line}")
-            self.console.see(tk.END)
-        if "[ALERT" in line:
-            self.tree.insert("", 0, values=(time.strftime("%H:%M:%S"), "HIGH", "Anomaly", line.split("]")[1]))
+            # 2. Update Attack Windows
+            if "ATTACK WINDOW:" in line:
+                in_window = True
+                window_lines = []
+                continue
+            
+            if in_window:
+                if "---" in line:
+                    in_window = False
+                    self.root.after(0, self.update_window, window_lines)
+                else:
+                    window_lines.append(line)
+            
+            # 3. Update Intelligence Vault
+            if "[DETECTED]" in line:
+                self.threat_count += 1
+                self.threats_var.set(str(self.threat_count))
+                self.root.after(0, self.update_vault, line)
 
-    def show_debug(self):
-        win = tk.Toplevel(self.root)
-        win.title("Engine Telemetry / Error Log")
-        win.geometry("800x600")
-        t = scrolledtext.ScrolledText(win, bg="black", fg="white")
-        t.pack(fill=tk.BOTH, expand=True)
-        t.insert(tk.END, "".join(self.debug_log))
+    def update_gauge(self, val):
+        extent = (val / 100) * 180
+        self.gauge.itemconfig(self.conf_bar, extent=extent)
+        self.gauge.itemconfig(self.conf_val, text=f"{int(val)}%")
+        color = self.colors["success"] if val > 80 else self.colors["high"] if val > 50 else self.colors["critical"]
+        self.gauge.itemconfig(self.conf_bar, outline=color)
+
+    def update_window(self, lines):
+        self.window_text.delete('1.0', tk.END)
+        for l in lines:
+            if ">>>" in l:
+                self.window_text.insert(tk.END, l, "danger")
+            else:
+                self.window_text.insert(tk.END, l)
+        self.window_text.tag_configure("danger", foreground=self.colors["critical"], font=("Consolas", 9, "bold"))
+        self.root.after(100, lambda: self.window_text.configure(bg="#2d1d1d"))
+        self.root.after(500, lambda: self.window_text.configure(bg="#0d1117"))
+
+    def update_vault(self, line):
+        t = time.strftime("%H:%M:%S")
+        cls = line.split("THREAT:")[1].strip() if "THREAT:" in line else "Anomalous Op"
+        self.tree.insert("", 0, values=(t, cls))
+        self.flash_screen()
+
+    def flash_screen(self):
+        orig = self.sys_status.cget("bg")
+        self.sys_status.config(bg=self.colors["critical"])
+        self.root.after(200, lambda: self.sys_status.config(bg=orig))
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = IDSGui(root)
+    app = CyberIDS(root)
     root.mainloop()
