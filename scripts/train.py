@@ -1,17 +1,16 @@
-import os
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from logbert_model import LogBERT
-from log_dataset import LogSequenceDataset, DataLoader, collate_fn
-from log_parser import LogParser
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from core.model import LogBERT
+from core.dataset import LogSequenceDataset, DataLoader, collate_fn
+from core.parser import LogParser
 import json
 
 def train_logbert(log_file, epochs=5, batch_size=32, lr=0.001):
     # Use relative paths
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    model_path = os.path.join(base_dir, 'logbert_model.pth')
-    meta_path = os.path.join(base_dir, 'parser_meta.json')
+    project_root = os.path.join(base_dir, '..')
+    model_path = os.path.join(project_root, 'models', 'logbert_model.pth')
+    meta_path = os.path.join(project_root, 'models', 'parser_meta.json')
     
     # Load Logs
     if not os.path.exists(log_file):

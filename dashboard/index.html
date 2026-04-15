@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LogBERT IDS | Real-time Neural Defense</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header>
+            <div class="logo">LOGBERT<span>.IDS</span></div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="pulse"></div>
+                    <span>SYSTEM LIVE</span>
+                </div>
+                <div class="status-item">
+                    <span id="current-time">--:--:--</span>
+                </div>
+            </div>
+        </header>
+
+        <aside class="panel stats-view">
+            <div class="panel-header">Performance Metrics</div>
+            
+            <div class="stat-group">
+                <div class="stat-label">Model Confidence</div>
+                <div class="stat-value" id="confidence-val">94.2%</div>
+                <div class="gauge-container">
+                    <canvas id="confidence-gauge"></canvas>
+                </div>
+            </div>
+
+            <div class="stat-group">
+                <div class="stat-label">Total Sequences</div>
+                <div class="stat-value" id="total-seq">0</div>
+            </div>
+
+            <div class="stat-group">
+                <div class="stat-label">Threats Neutered</div>
+                <div class="stat-value" style="color: var(--accent-red);" id="threat-count">0</div>
+            </div>
+
+            <div class="stat-group" style="margin-top: auto;">
+                <div class="stat-label">Engine Version</div>
+                <div style="font-size: 11px; opacity: 0.6;">LogBERT v2.1.0-PRO</div>
+            </div>
+        </aside>
+
+        <section class="panel main-view">
+            <div class="panel-header">
+                System Log Stream
+                <span style="font-size: 10px; opacity: 0.5;">REAL-TIME TAIL</span>
+            </div>
+            <div class="log-stream" id="log-stream">
+                <!-- Logs injected here -->
+            </div>
+        </section>
+
+        <aside class="panel alerts-view">
+            <div class="panel-header">High-Confidence Threats</div>
+            <div id="alert-list">
+                <!-- Alerts injected here -->
+            </div>
+        </aside>
+
+        <section class="panel trace-view">
+            <div class="panel-header">Anomaly Signature Tracing</div>
+            <div class="metrics-row">
+                <div class="chart-placeholder">Signature Waveform Visualization</div>
+                <div class="chart-placeholder">Spatial Cluster Projection</div>
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

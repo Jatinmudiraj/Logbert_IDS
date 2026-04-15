@@ -1,13 +1,19 @@
-import torch
-import json
-import logging
-from logbert_model import LogBERT
-from log_dataset import LogSequenceDataset, DataLoader, collate_fn
-from log_parser import LogParser
+import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from core.model import LogBERT
+from core.dataset import LogSequenceDataset, DataLoader, collate_fn
+from core.parser import LogParser
 
 def evaluate_and_save():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.join(base_dir, '..')
+    meta_path = os.path.join(project_root, 'models', 'parser_meta.json')
+    model_path = os.path.join(project_root, 'models', 'logbert_model.pth')
+    
+    import json # Ensure json is imported
     # Load metadata
-    with open('/raid/home/geeta/geeta/LogBERT_IDS/parser_meta.json', 'r') as f:
+    with open(meta_path, 'r') as f:
         meta = json.load(f)
     template_to_id = meta['template_to_id']
     vocab_size = meta['vocab_size']
@@ -15,11 +21,15 @@ def evaluate_and_save():
     
     # Load model
     model = LogBERT(vocab_size=vocab_size, d_model=256, nhead=8, num_layers=4)
-    model.load_state_dict(torch.load('/raid/home/geeta/geeta/LogBERT_IDS/logbert_model.pth'))
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     model.eval()
 
-    # Load test labeled data
-    with open('/raid/home/geeta/geeta/temp/test_labeled.json', 'r') as f:
+    # Load test labeled data (using a default placeholder if not provided)
+    test_data_path = os.path.join(project_root, 'data', 'test_labeled.json')
+    if not os.path.exists(test_data_path):
+        print(f"[!] Warning: Test labeled data not found at {test_data_path}")
+        return
+    with open(test_data_path, 'r') as f:
         test_data = json.load(f)
 
     # Clean function matching parser
@@ -100,7 +110,8 @@ def evaluate_and_save():
     output_lines.append(f"Recall: {recall*100:.2f}%")
     output_lines.append(f"F1-Score: {f1*100:.2f}%")
     
-    with open('/raid/home/geeta/geeta/LogBERT_IDS/result.txt', 'w') as f:
+    result_path = os.path.join(project_root, 'backup', 'result.txt')
+    with open(result_path, 'w') as f:
         f.write("\n".join(output_lines) + "\n")
         
     print("Results saved successfully.")
