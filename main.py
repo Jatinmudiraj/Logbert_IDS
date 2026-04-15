@@ -19,6 +19,9 @@ def main():
     # Dashboard Command
     dashboard_parser = subparsers.add_parser('dashboard', help='Open the web dashboard')
 
+    # GUI Command (Native Desktop)
+    gui_parser = subparsers.add_parser('gui', help='Launch the Desktop GUI application')
+
     args = parser.parse_args()
 
     if args.command == 'detect':
@@ -33,6 +36,14 @@ def main():
         dashboard_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'dashboard', 'index.html'))
         print(f"[*] Dashboard available at: file://{dashboard_path}")
         print("[*] Please open this in your browser to view the real-time IDS.")
+
+    elif args.command == 'gui':
+        print("[*] Launching Desktop GUI...")
+        import scripts.gui as gui
+        import tkinter as tk
+        root = tk.Tk()
+        app = gui.IDSGui(root)
+        root.mainloop()
     
     else:
         parser.print_help()
