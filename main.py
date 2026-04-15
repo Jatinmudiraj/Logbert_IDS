@@ -228,7 +228,14 @@ class NeuralGuardian(QMainWindow):
              open(log_path, "a").close()
 
         with open(log_path, "r", errors="ignore") as f:
+            # First, read the last ~200 lines to populate the UI instantly
             f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 20000))  # Go back roughly 20KB to get some history
+            
+            # Skip the potentially half-cut first line
+            f.readline()
+            
             while self.running:
                 line = f.readline()
                 if not line:
