@@ -1,39 +1,32 @@
 #!/bin/bash
 echo "===================================================="
-echo " LOGBERT IDS | UBUNTU AUTO-SETUP & REPAIR"
+echo " NEURAL GUARDIAN | UBUNTU AUTO-SETUP"
 echo "===================================================="
 
-# 1. Install missing system dependencies
-echo "[*] Installing System Dependencies (tk, torch-deps)..."
+# 1. System Dependencies
+echo "[*] Installing System UI Libraries..."
 sudo apt update
-sudo apt install python3-tk python3-full -y
+sudo apt install python3-pip python3-venv libxcb-cursor0 -y
 
-# 2. Fix Permissions
-echo "[*] Configuring Permissions..."
-chmod +x main.py
-sudo chmod 644 /var/log/auth.log 2>/dev/null || echo "[!] Notice: Cannot modify auth.log directly. Will use sudo for reading."
-
-# 3. Model Integrity Check
-echo "[*] Verifying Neural Models..."
-if [ ! -f "models/logbert_model.pth" ]; then
-    echo "[ERROR] Neural Weights missing! Please download them to models/logbert_model.pth"
-fi
-
-if [ ! -f "models/parser_meta.json" ]; then
-    echo "[ERROR] Metadata missing! Please ensure models/parser_meta.json exists."
-fi
-
-# 4. Environment Check
-echo "[*] Checking Python environment..."
+# 2. Virtual Environment
 if [ ! -d "venv" ]; then
-    echo "[*] Creating virtual environment..."
+    echo "[*] Creating environment..."
     python3 -m venv venv
 fi
 
 source venv/bin/activate
+echo "[*] Installing Neural Engine & UI Components..."
+pip install --upgrade pip
 pip install -r requirements.txt
 
+# 3. Model Verification
+echo "[*] Verifying Neural Guardian Weights..."
+if [ ! -f "model/production.joblib" ]; then
+    echo "[!] WARNING: Production weights missing in model/."
+fi
+
 echo "===================================================="
-echo " SETUP COMPLETE. Run the HUB with:"
-echo " sudo ./venv/bin/python3 main.py gui"
+echo " SETUP COMPLETE."
+echo " Launch the Guardian with:"
+echo " sudo ./venv/bin/python3 main.py"
 echo "===================================================="
