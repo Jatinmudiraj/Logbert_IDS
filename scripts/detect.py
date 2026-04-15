@@ -22,7 +22,7 @@ def clean_log(log):
     log = re.sub(r' +', ' ', log).strip()
     return log
 
-def detect_anomalies(log_file=None, g=5, distance_threshold=2.0, live=False, use_stdin=False):
+def detect_anomalies(log_file=None, g=5, distance_threshold=2.0, live=False, use_stdin=False, callback=None):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.join(base_dir, '..')
     meta_path = os.path.join(project_root, 'models', 'parser_meta.json')
@@ -83,9 +83,6 @@ def detect_anomalies(log_file=None, g=5, distance_threshold=2.0, live=False, use
         sequence_buffer.append(log_id)
         log_string_buffer.append(raw_line)
         
-        # Calculate current context stats
-        current_conf = 100.0
-        
         if len(sequence_buffer) >= 10:
             seq = [dist_token] + sequence_buffer[-10:]
             seq_tensor = torch.tensor([seq])
@@ -102,28 +99,29 @@ def detect_anomalies(log_file=None, g=5, distance_threshold=2.0, live=False, use
                 actual_token = sequence_buffer[-1]
                 actual_prob = probs[actual_token].item() if actual_token != 0 else 0
                 
-                # Dynamic Confidence Calculation
                 current_conf = max(0, 100 - (current_dist * 5))
-                if actual_token not in top_indices:
-                    current_conf *= (actual_prob + 0.1)
+                if actual_token not in top_indices: current_conf *= (actual_prob + 0.1)
 
                 confidence_level = None
-                if actual_token not in top_indices and actual_prob < 0.005 and current_dist > distance_threshold * 1.5:
-                    confidence_level = "CRITICAL"
-                elif actual_token not in top_indices and actual_prob < 0.05:
-                    confidence_level = "HIGH"
-                
-                print(f" [ANALYZING] {raw_line[:100]}... | CONFIDENCE: {current_conf:.2f}%", flush=True)
+                if actual_token not in top_indices and actual_prob < 0.05:
+                    confidence_level = "CRITICAL" if actual_prob < 0.005 else "HIGH"
+
+                if callback:
+                    callback(f"CONFIDENCE: {current_conf:.2f}%")
+                    callback(f" [ANALYZING] {raw_line[:100]}...")
+                else:
+                    print(f" [ANALYZING] {raw_line[:100]}... | {current_conf:.2f}%", flush=True)
 
                 if confidence_level:
                     attack_type = classifier.classify(raw_line)
-                    print(f"\n[DETECTED - {confidence_level}] THREAT: {attack_type}", flush=True)
-                    print(f" > PROBABILITY: {actual_prob*100:.4f}% | DISTANCE: {current_dist:.2f}", flush=True)
-                    print(f" > ATTACK WINDOW:", flush=True)
+                    alert_msg = f"\n[DETECTED - {confidence_level}] THREAT: {attack_type}\n"
+                    alert_msg += f" > ATTACK WINDOW:\n"
                     for idx, l in enumerate(log_string_buffer[-10:]):
-                        prefix = ">>> " if idx == 9 else "    "
-                        print(f"{prefix}{l}", flush=True)
-                    print("-" * 40, flush=True)
+                        p = ">>> " if idx == 9 else "    "
+                        alert_msg += f"{p}{l}\n"
+                    
+                    if callback: callback(alert_msg)
+                    else: print(alert_msg, flush=True)
 
         if len(sequence_buffer) > 50: 
             sequence_buffer = sequence_buffer[-10:]

@@ -1,17 +1,18 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import threading
-import subprocess
 import os
 import sys
-import json
 import time
 import queue
+
+# Import the detection engine directly for faster, more reliable Ubuntu integration
+from scripts.detect import detect_anomalies
 
 class NeuralArmorIDS:
     def __init__(self, root):
         self.root = root
-        self.root.title("LOGBERT | Neural Cyber-Security Intelligence v4.0")
+        self.root.title("LOGBERT | Neural Cyber-Security Intelligence v5.0")
         self.root.geometry("1400x950")
         self.root.configure(bg="#010409")
         
@@ -23,7 +24,6 @@ class NeuralArmorIDS:
 
         self.setup_ui()
         self.monitoring = False
-        self.process = None
         self.msg_queue = queue.Queue()
         self.stats = {"logs": 0, "threats": 0}
 
@@ -49,8 +49,8 @@ class NeuralArmorIDS:
         left.pack_propagate(False)
 
         tk.Label(left, text="CONTROLS", font=("Segoe UI", 10, "bold"), fg=self.ui_colors["dim"], bg=self.ui_colors["hud"]).pack(pady=20)
-        self.src_var = tk.StringVar(value="journalctl (Live Feed)")
-        s_menu = ttk.Combobox(left, textvariable=self.src_var, values=["journalctl (Live Feed)", "/var/log/auth.log", "System Simulation"])
+        self.src_var = tk.StringVar(value="/var/log/auth.log")
+        s_menu = ttk.Combobox(left, textvariable=self.src_var, values=["/var/log/auth.log", "System Simulation"])
         s_menu.pack(fill=tk.X, padx=25, pady=10)
 
         self.btn_run = tk.Button(left, text="ENGAGE ARMOR", command=self.toggle, bg=self.ui_colors["success"], fg="white", font=("Segoe UI", 12, "bold"), relief=tk.FLAT, pady=15)
@@ -87,86 +87,62 @@ class NeuralArmorIDS:
             self.monitoring = True
             self.btn_run.config(text="STOP ENGINE", bg=self.ui_colors["critical"])
             self.status_msg.config(text="[ ARMOR ACTIVE ]", fg="#3fb950")
-            threading.Thread(target=self.reader_thread, daemon=True).start()
+            threading.Thread(target=self.engine_service, daemon=True).start()
         else:
             self.monitoring = False
             self.btn_run.config(text="ENGAGE ARMOR", bg=self.ui_colors["success"])
             self.status_msg.config(text="[ STANDBY ]", fg=self.ui_colors["dim"])
-            if self.process: self.process.terminate()
 
-    def reader_thread(self):
-        self.msg_queue.put("[GUI_LOG] Attempting to start engine...\n")
-        root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        py_exec = sys.executable
-        main_py = os.path.join(root_path, 'main.py')
-        
+    def engine_service(self):
+        self.msg_queue.put("[GUI] Booting Neural Engine internally...\n")
         src = self.src_var.get()
-        if "journalctl" in src:
-            cmd = f"journalctl -n 20 -f | {py_exec} -u {main_py} detect --stdin"
-        elif "/var/log" in src:
-            cmd = [py_exec, "-u", main_py, "detect", "--file", "/var/log/auth.log", "--live"]
-        else:
-            cmd = [py_exec, "-u", os.path.join(root_path, "scripts", "sim_logs.py")]
+        
+        def gui_callback(msg):
+            self.msg_queue.put(msg + "\n")
 
         try:
-            # Use shell if cmd is a string (like the pipe)
-            is_shell = isinstance(cmd, str)
-            self.process = subprocess.Popen(cmd, shell=is_shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-            
-            self.msg_queue.put(f"[GUI_LOG] Process started (PID: {self.process.pid})\n")
-            
-            while self.monitoring:
-                line = self.process.stdout.readline()
-                if not line:
-                    if self.process.poll() is not None:
-                        self.msg_queue.put("[GUI_LOG] Engine process terminated unexpectedly.\n")
-                        break
-                    continue
-                self.msg_queue.put(line)
+            if "Simulation" in src:
+                # Run simulator in background
+                sim_path = os.path.join(os.path.dirname(__file__), "sim_logs.py")
+                subprocess.Popen([sys.executable, sim_path])
+                detect_anomalies(log_file="data/sim.log", live=True, callback=gui_callback)
+            else:
+                detect_anomalies(log_file=src, live=True, callback=gui_callback)
         except Exception as e:
-            self.msg_queue.put(f"[FATAL_ENGINE_ERROR] {str(e)}\n")
+            self.msg_queue.put(f"[FATAL_ERR] {str(e)}\n")
 
     def update_loop(self):
         try:
             while True:
                 line = self.msg_queue.get_nowait()
-                self.handle_line(line)
+                if not line: continue
+                
+                if "CONFIDENCE:" in line:
+                    pass # handled via metrics later
+                elif "[ANALYZING]" in line:
+                    self.stats["logs"] += 1
+                    self.logs_val.set(str(self.stats["logs"]))
+                    self.console.insert(tk.END, f" {line}")
+                    self.console.see(tk.END)
+                elif "[DETECTED]" in line or ">>>" in line:
+                    if "[DETECTED]" in line:
+                        self.stats["threats"] += 1
+                        self.threats_val.set(str(self.stats["threats"]))
+                        self.console.insert(tk.END, line, "alert")
+                        self.console.tag_configure("alert", foreground="#ff3333", font=("Consolas", 10, "bold"))
+                    
+                    if ">>>" in line:
+                        self.win_text.delete("1.0", tk.END)
+                        self.win_text.insert(tk.END, line, "hot")
+                    else:
+                        self.win_text.insert(tk.END, line)
+                    self.win_text.tag_configure("hot", foreground="#ff0000", font=("Consolas", 10, "bold"))
+                    self.win_text.see(tk.END)
+                else:
+                    self.console.insert(tk.END, line)
         except queue.Empty:
             pass
         self.root.after(50, self.update_loop)
-
-    def handle_line(self, line):
-        # 1. Debug Logs
-        if "[GUI_LOG]" in line or "[FATAL" in line:
-            self.console.insert(tk.END, f" {line}", "debug")
-            self.console.tag_configure("debug", foreground="#58a6ff")
-            self.console.see(tk.END)
-            return
-
-        # 2. Analyzing Logs
-        if "[ANALYZING]" in line:
-            self.stats["logs"] += 1
-            self.logs_val.set(str(self.stats["logs"]))
-            self.console.insert(tk.END, f" {line}")
-            self.console.see(tk.END)
-
-        # 3. Threat Alerts
-        if "[DETECTED]" in line:
-            self.stats["threats"] += 1
-            self.threats_val.set(str(self.stats["threats"]))
-            self.console.insert(tk.END, line, "alert")
-            self.console.tag_configure("alert", foreground="#ff3333", font=("Consolas", 10, "bold"))
-            self.console.see(tk.END)
-
-        # 4. Window Sequence
-        if ">>>" in line or "   " in line:
-            if ">>>" in line:
-                self.win_text.delete("1.0", tk.END) # Clear for new attack
-                self.win_text.insert(tk.END, f"[!] ACTIVE THREAT: {line}\n", "hot")
-            else:
-                self.win_text.insert(tk.END, line)
-            self.win_text.tag_configure("hot", foreground="#ff0000", font=("Consolas", 10, "bold"))
-            self.win_text.see(tk.END)
 
 if __name__ == "__main__":
     root = tk.Tk()
