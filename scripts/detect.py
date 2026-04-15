@@ -67,14 +67,24 @@ def detect_anomalies(log_file, g=5, distance_threshold=2.0, live=False):
     print("=" * 60)
 
     if live:
-        print(f"[*] STARTING LIVE ANALYZER...")
+        print(f"[*] HEARTBEAT: Neutral Defense Engine is active and listening...", flush=True)
         with open(log_file, 'r', errors='ignore') as f:
-            # Start from the end
+            # Show last 10 lines to confirm it's working
+            f.seek(0, os.SEEK_END)
+            end_pos = f.tell()
+            f.seek(max(0, end_pos - 1024)) # Go back ~1KB
+            initial_lines = f.readlines()[-10:]
+            for l in initial_lines:
+                print(f" [INIT] {l.strip()}", flush=True)
+            
             f.seek(0, os.SEEK_END)
             while True:
                 line = f.readline()
                 if not line:
-                    time.sleep(0.5); continue
+                    time.sleep(1.0)
+                    if int(time.time()) % 10 == 0:
+                        print(f"[*] HEARTBEAT: Listening for threats...", flush=True)
+                    continue
                 
                 cleaned = clean_log(line)
                 log_id = template_to_id.get(cleaned, 0)

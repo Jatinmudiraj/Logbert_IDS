@@ -143,9 +143,10 @@ class IDSGui:
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         python_exec = os.path.join(project_root, 'venv', 'bin', 'python3')
         main_py = os.path.join(project_root, 'main.py')
+        log_file = "/var/log/auth.log"
         
         # In a real environment, we'd want to browse for a file, but let's stick to auth.log for now
-        cmd = [python_exec, main_py, "detect", "--file", "/var/log/auth.log", "--live"]
+        cmd = [python_exec, "-u", main_py, "detect", "--file", log_file, "--live"]
         self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         
         l_count = 0
