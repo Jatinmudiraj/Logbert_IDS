@@ -63,6 +63,9 @@ def detect_anomalies(log_file=None, g=5, distance_threshold=2.0, live=False, use
         print(f"[ERROR] Log source unreachable: {log_file}", flush=True)
         return
 
+    sequence_buffer = []
+    ema_dist = distance_threshold
+    alpha = 0.2
     log_string_buffer = []
 
     print("=" * 60, flush=True)
