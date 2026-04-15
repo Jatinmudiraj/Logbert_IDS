@@ -33,8 +33,12 @@ class MultiLogMonitor(threading.Thread):
             time.sleep(2)
             
         with open(path, "r", errors="ignore") as f:
-            # Start at end
+            # Get historical context for instant GUI population
             f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - 20000))
+            f.readline() # Ignore first cut line
+            
             last_ino = os.fstat(f.fileno()).st_ino
             
             while self.running:

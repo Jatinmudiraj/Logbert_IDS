@@ -130,16 +130,30 @@ class NeuralGuardian(QMainWindow):
         self.update_signal.connect(self.process_event)
 
     def init_engine(self):
-        # Default config
-        self.config = {
-            'monitoring': {'sources': [{'path': '/var/log/auth.log', 'domain': 'ssh', 'enabled': True}], 'window_size': 10},
-            'detection': {'model_path': 'model/production.joblib'}
-        }
-        self.detector = IDSDetector(self.config['detection']['model_path'])
-        self.window = deque(maxlen=10)
-        self.running = True
+        from monitor import MultiLogMonitor
         
-        threading.Thread(target=self.scan_thread, daemon=True).start()
+        self.config = {
+            'monitoring': {'sources': [{'path': '/var/log/auth.log', 'domain': 'ssh', 'enabled': True}], 'window_size': 10, 'min_lines_for_inference': 5},
+            'detection': {'model_path': 'model/production.joblib', 'confidence_blocking_threshold': 0.95},
+            'response': {'enabled': False}
+        }
+        
+        # Ensure log exists
+        if not os.path.exists('/var/log/auth.log'):
+            os.system('touch data/sim.log 2>/dev/null || true')
+            self.config['monitoring']['sources'][0]['path'] = 'data/sim.log'
+            
+        self.monitor = MultiLogMonitor(self.config, self.on_log_received)
+        self.monitor.daemon = True
+        self.monitor.start()
+
+    def on_log_received(self, data):
+        self.update_signal.emit({
+            "raw": data.get("raw", ""),
+            "is_attack": data.get("is_attack", False),
+            "proba": data.get("confidence", 0.0),
+            "type": data.get("stage", "unknown")
+        })
 
     def setup_ui(self):
         cw = QWidget()
@@ -219,46 +233,7 @@ class NeuralGuardian(QMainWindow):
         lay.addWidget(v)
         return card, v
 
-    def scan_thread(self):
-        log_path = self.config['monitoring']['sources'][0]['path']
-        if not os.path.exists(log_path):
-             # simulation failover
-             log_path = "data/sim.log"
-             if not os.path.exists("data"): os.makedirs("data")
-             open(log_path, "a").close()
 
-        with open(log_path, "r", errors="ignore") as f:
-            # First, read the last ~200 lines to populate the UI instantly
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            f.seek(max(0, size - 20000))  # Go back roughly 20KB to get some history
-            
-            # Skip the potentially half-cut first line
-            f.readline()
-            
-            while self.running:
-                line = f.readline()
-                if not line:
-                    time.sleep(0.5)
-                    continue
-                
-                # Logic from reference repo detector
-                norm = normalize_record({"msg": line.strip()}, domain="ssh")
-                self.window.append(norm)
-                
-                is_attack = False
-                proba = 0.0
-                stage = "none"
-                
-                if len(self.window) >= 5:
-                    is_attack, stage, proba = self.detector.predict(list(self.window))
-                
-                self.update_signal.emit({
-                    "raw": line.strip(),
-                    "is_attack": is_attack,
-                    "proba": proba,
-                    "type": stage
-                })
 
     @Slot(dict)
     def process_event(self, data):
