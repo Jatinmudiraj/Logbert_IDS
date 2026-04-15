@@ -59,6 +59,12 @@ class NeuralArmorIDS:
         self.logs_val = self.add_metric(left, "LOGS ANALYZED", "0", "white")
         self.threats_val = self.add_metric(left, "THREATS FOUND", "0", self.ui_colors["critical"])
 
+        # Real-time Threat Score Graph
+        tk.Label(left, text="NEURAL THREAT SCORE", font=("Segoe UI", 8, "bold"), fg=self.ui_colors["dim"], bg=self.ui_colors["hud"]).pack(pady=(20, 5))
+        self.graph = tk.Canvas(left, width=280, height=120, bg="#000000", highlightthickness=0)
+        self.graph.pack(pady=10)
+        self.points = [100] * 50
+
         # Console
         center = tk.Frame(body, bg=self.ui_colors["bg"])
         center.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -118,7 +124,10 @@ class NeuralArmorIDS:
                 if not line: continue
                 
                 if "CONFIDENCE:" in line:
-                    pass # handled via metrics later
+                    try:
+                        c = float(line.split(":")[1].split("%")[0].strip())
+                        self.update_graph(c)
+                    except: pass
                 elif "[ANALYZING]" in line:
                     self.stats["logs"] += 1
                     self.logs_val.set(str(self.stats["logs"]))
