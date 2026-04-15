@@ -42,7 +42,7 @@ def main():
         import scripts.gui as gui
         import tkinter as tk
         root = tk.Tk()
-        app = gui.IDSGui(root)
+        app = gui.CyberIDS(root)
         root.mainloop()
     
     else:
