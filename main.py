@@ -161,12 +161,12 @@ class NeuralGuardian(QMainWindow):
 
         # Metrics Row
         metrics_lay = QHBoxLayout()
-        self.card_logs = self.create_metric("LOGS ANALYZED", "0", "#8b949e")
-        self.card_threats = self.create_metric("THREATS DETECTED", "0", "#ff7b72")
-        self.card_acc = self.create_metric("NEURAL CONFIDENCE", "99.8%", "#58a6ff")
-        metrics_lay.addWidget(self.card_logs)
-        metrics_lay.addWidget(self.card_threats)
-        metrics_lay.addWidget(self.card_acc)
+        card1, self.card_logs = self.create_metric("LOGS ANALYZED", "0", "#8b949e")
+        card2, self.card_threats = self.create_metric("THREATS DETECTED", "0", "#ff7b72")
+        card3, self.card_acc = self.create_metric("NEURAL CONFIDENCE", "99.8%", "#58a6ff")
+        metrics_lay.addWidget(card1)
+        metrics_lay.addWidget(card2)
+        metrics_lay.addWidget(card3)
         main_layout.addLayout(metrics_lay)
 
         # Middle Content
@@ -217,7 +217,7 @@ class NeuralGuardian(QMainWindow):
         v.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {color};")
         lay.addWidget(t)
         lay.addWidget(v)
-        return v
+        return card, v
 
     def scan_thread(self):
         log_path = self.config['monitoring']['sources'][0]['path']
