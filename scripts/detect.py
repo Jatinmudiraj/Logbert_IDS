@@ -9,6 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from core.model import LogBERT
 from core.dataset import LogSequenceDataset, DataLoader, collate_fn
 from core.parser import LogParser
+from core.classifier import LogClassifier
 
 def clean_log(log):
     import re
@@ -47,6 +48,7 @@ def detect_anomalies(log_file, g=5, distance_threshold=2.0, live=False):
         
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     model.eval()
+    classifier = LogClassifier()
     
     center = model.center.detach()
     
@@ -115,16 +117,18 @@ def detect_anomalies(log_file, g=5, distance_threshold=2.0, live=False):
                             reason = f"Distance outlier (Score: {current_dist:.2f})"
                         
                         if confidence_level:
+                            attack_type = classifier.classify(line)
                             print(f"\n[ALERT - {confidence_level}] {time.strftime('%H:%M:%S')}")
+                            print(f" > Threat Type: {attack_type}")
                             print(f" > Event: {line.strip()[:150]}...")
                             print(f" > Reason: {reason}")
-                            print(f" > Stats: Prob={actual_prob*100:.4f}%, AvgDist={ema_dist:.2f}")
                             
                             # UI UPDATE
                             ui_data = {
                                 "new_log": line.strip(),
                                 "new_alert": {
                                     "level": confidence_level,
+                                    "type": attack_type,
                                     "reason": reason,
                                     "line": line.strip()
                                 },
