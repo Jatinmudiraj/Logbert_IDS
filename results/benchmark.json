@@ -1,0 +1,7 @@
+{
+    "avg_latency_ms": 9.044811725616455,
+    "throughput_seq_sec": 110.56062086597434,
+    "device": "cuda",
+    "iterations": 100,
+    "window_size": 20
+}

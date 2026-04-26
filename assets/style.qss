@@ -1,0 +1,76 @@
+/* Professional Cyber-Defense Theme */
+
+QMainWindow {
+    background-color: #0f172a;
+}
+
+QWidget {
+    color: #e5e7eb;
+    font-family: 'Segoe UI', 'Roboto', 'Arial';
+    font-size: 13px;
+}
+
+QFrame#StatCard {
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+}
+
+QLabel#StatValue {
+    font-size: 24px;
+    font-weight: bold;
+    color: #f8fafc;
+}
+
+QLabel#StatTitle {
+    font-size: 11px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-weight: bold;
+}
+
+QTableWidget {
+    background-color: #111827;
+    border: 1px solid #334155;
+    gridline-color: #1e293b;
+    border-radius: 8px;
+    selection-background-color: #1e40af;
+}
+
+QHeaderView::section {
+    background-color: #1e293b;
+    color: #cbd5e1;
+    padding: 10px;
+    border: none;
+    font-weight: bold;
+}
+
+QPushButton#ActionBtn {
+    background-color: #2563eb;
+    color: white;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-weight: bold;
+}
+
+QPushButton#ActionBtn:hover {
+    background-color: #1d4ed8;
+}
+
+QPushButton#ActionBtn:pressed {
+    background-color: #1e40af;
+}
+
+QListWidget {
+    background-color: #0f172a;
+    border: none;
+    color: #94a3b8;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* Severity Badges */
+QLabel#SeverityCritical { color: #ef4444; font-weight: bold; }
+QLabel#SeverityHigh { color: #f97316; font-weight: bold; }
+QLabel#SeverityMedium { color: #eab308; font-weight: bold; }
+QLabel#SeverityLow { color: #3b82f6; font-weight: bold; }
+QLabel#SeverityNormal { color: #22c55e; font-weight: bold; }
