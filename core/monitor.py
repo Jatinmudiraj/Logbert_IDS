@@ -4,10 +4,11 @@ import threading
 from collections import deque
 
 class LogMonitor(threading.Thread):
-    def __init__(self, log_paths, callback, window_size=20, stride=1):
+    def __init__(self, log_paths, callback, live_callback=None, window_size=20, stride=1):
         super().__init__()
         self.log_paths = log_paths
         self.callback = callback
+        self.live_callback = live_callback
         self.window_size = window_size
         self.stride = stride
         self.daemon = True
@@ -37,24 +38,32 @@ class LogMonitor(threading.Thread):
             while not os.path.exists(path) and not self.stop_event.is_set():
                 time.sleep(2)
         
-        with open(path, 'r', errors='ignore') as f:
-            # Move to the end of file
-            f.seek(0, os.SEEK_END)
-            
-            while not self.stop_event.is_set():
-                line = f.readline()
-                if not line:
-                    time.sleep(0.1)
-                    continue
+        try:
+            with open(path, 'r', errors='ignore') as f:
+                # Move to the end of file
+                f.seek(0, os.SEEK_END)
                 
-                line = line.strip()
-                if line:
-                    self.buffers[path].append(line)
+                while not self.stop_event.is_set():
+                    line = f.readline()
+                    if not line:
+                        time.sleep(0.1)
+                        continue
                     
-                    if len(self.buffers[path]) >= self.window_size:
-                        # Send window for analysis
-                        self.callback(list(self.buffers[path]), path)
+                    line = line.strip()
+                    if line:
+                        # Send to live callback immediately
+                        if self.live_callback:
+                            self.live_callback(line, path)
+                            
+                        self.buffers[path].append(line)
+                        
+                        if len(self.buffers[path]) >= self.window_size:
+                            # Send window for analysis
+                            self.callback(list(self.buffers[path]), path)
+        except Exception as e:
+            print(f"[!] Error monitoring {path}: {e}")
 
     def stop(self):
         self.stop_event.set()
         self.running = False
+
