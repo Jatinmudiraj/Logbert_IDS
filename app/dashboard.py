@@ -16,6 +16,12 @@ from core.monitor import LogMonitor
 from core.db import IDSDatabase
 from core.simulator import LogSimulator
 
+# Import Pages
+from app.pages.dashboard_page import DashboardPage
+from app.pages.live_logs_page import LiveLogsPage
+from app.pages.history_page import ThreatHistoryPage
+from app.pages.simulation_page import SimulationPage
+
 class NeuralGuardianDashboard(QMainWindow):
     # Signal to handle logs from threads safely in UI
     log_received = Signal(str, str) # log_line, source
@@ -37,16 +43,15 @@ class NeuralGuardianDashboard(QMainWindow):
         self.setup_ui()
         
         # Connect Signals
-        self.log_received.connect(self.update_live_feed)
+        self.log_received.connect(self.update_log_feeds)
         self.window_analyzed.connect(self.on_anomaly_detected)
         
         # Monitor Thread
-        # We monitor both a system log and our simulation log
         self.monitor = LogMonitor(
             log_paths=["/var/log/auth.log", "data/sim.log"],
             callback=self.process_window,
             live_callback=self.process_live_log,
-            window_size=10 # Smaller window for faster feedback
+            window_size=10
         )
         self.monitor.start()
 
@@ -57,7 +62,7 @@ class NeuralGuardianDashboard(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # 1. Sidebar
+        # 1. Sidebar Navigation
         sidebar = QFrame()
         sidebar.setFixedWidth(240)
         sidebar.setStyleSheet("background-color: #0f172a; border-right: 1px solid #1e293b;")
@@ -67,15 +72,28 @@ class NeuralGuardianDashboard(QMainWindow):
         logo.setStyleSheet("font-size: 20px; font-weight: bold; color: #60a5fa; margin: 25px 0;")
         sidebar_layout.addWidget(logo, alignment=Qt.AlignCenter)
         
-        self.btn_dash = QPushButton("  Dashboard")
-        self.btn_logs = QPushButton("  Live Logs")
-        self.btn_threats = QPushButton("  Threat History")
-        self.btn_sim = QPushButton("  Simulation Control")
+        self.nav_buttons = {}
+        nav_items = [
+            ("Dashboard", self.show_dashboard),
+            ("Live Logs", self.show_live_logs),
+            ("Threat History", self.show_history),
+            ("Simulation Control", self.show_simulation)
+        ]
         
-        for btn in [self.btn_dash, self.btn_logs, self.btn_threats, self.btn_sim]:
-            btn.setStyleSheet("text-align: left; padding: 12px; border: none; border-radius: 8px; margin: 2px 10px;")
+        for name, callback in nav_items:
+            btn = QPushButton(f"  {name}")
+            btn.setStyleSheet("""
+                QPushButton {
+                    text-align: left; padding: 12px; border: none; border-radius: 8px; margin: 2px 10px;
+                    color: #94a3b8;
+                }
+                QPushButton:hover { background-color: #1e293b; color: #f8fafc; }
+                QPushButton#active { background-color: #2563eb; color: white; }
+            """)
             btn.setFont(QFont("Segoe UI", 10))
+            btn.clicked.connect(callback)
             sidebar_layout.addWidget(btn)
+            self.nav_buttons[name] = btn
         
         sidebar_layout.addStretch()
         
@@ -98,80 +116,59 @@ class NeuralGuardianDashboard(QMainWindow):
         sidebar_layout.addWidget(status_box)
         main_layout.addWidget(sidebar)
 
-        # 2. Main Content Area
-        content_area = QWidget()
-        self.content_layout = QVBoxLayout(content_area)
-        self.content_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.addWidget(content_area)
-
-        # Header Row
-        header = QHBoxLayout()
-        self.page_title = QLabel("Threat Detection Overview")
-        self.page_title.setStyleSheet("font-size: 24px; font-weight: bold; color: #f8fafc;")
-        header.addWidget(self.page_title)
-        header.addStretch()
+        # 2. Main Content Area (Stacked Widget)
+        self.stack = QStackedWidget()
         
-        self.sim_status = QLabel("Simulation: OFF")
-        self.sim_status.setStyleSheet("color: #94a3b8; padding-right: 20px;")
-        header.addWidget(self.sim_status)
+        self.page_dash = DashboardPage()
+        self.page_live = LiveLogsPage()
+        self.page_hist = ThreatHistoryPage(self.db)
+        self.page_sim = SimulationPage()
+        self.page_sim.toggle_sim.connect(self.handle_simulation_toggle)
         
-        self.btn_toggle_sim = QPushButton("Start Simulation")
-        self.btn_toggle_sim.setObjectName("ActionBtn")
-        self.btn_toggle_sim.clicked.connect(self.toggle_simulation)
-        header.addWidget(self.btn_toggle_sim)
-        self.content_layout.addLayout(header)
-
-        # Stats Cards Row
-        stats_row = QHBoxLayout()
-        self.card_logs = StatCard("Logs Processed", "0", "#3b82f6")
-        self.card_threats = StatCard("Anomalies", "0", "#ef4444")
-        self.card_conf = StatCard("Neural Confidence", "99.8%", "#22c55e")
-        self.card_latency = StatCard("Analysis Latency", "8ms", "#eab308")
+        self.stack.addWidget(self.page_dash)
+        self.stack.addWidget(self.page_live)
+        self.stack.addWidget(self.page_hist)
+        self.stack.addWidget(self.page_sim)
         
-        stats_row.addWidget(self.card_logs)
-        stats_row.addWidget(self.card_threats)
-        stats_row.addWidget(self.card_conf)
-        stats_row.addWidget(self.card_latency)
-        self.content_layout.addLayout(stats_row)
-
-        # Splitter for Table and Live Feed
-        splitter = QSplitter(Qt.Vertical)
+        main_layout.addWidget(self.stack)
         
-        # Detection Table
-        table_container = QWidget()
-        table_layout = QVBoxLayout(table_container)
-        table_layout.addWidget(QLabel("DETECTED ANOMALIES (LogBERT Windows)"))
-        self.table = QTableWidget(0, 7)
-        self.table.setHorizontalHeaderLabels(["Timestamp", "Host", "Attack Type", "Score", "MITRE", "Reason", "Severity"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setStyleSheet("QTableWidget { border-radius: 8px; }")
-        table_layout.addWidget(self.table)
-        splitter.addWidget(table_container)
+        # Default Page
+        self.show_dashboard()
 
-        # Live Feed
-        feed_container = QWidget()
-        feed_layout = QVBoxLayout(feed_container)
-        feed_layout.addWidget(QLabel("LIVE TELEMETRY STREAM"))
-        self.log_feed = QListWidget()
-        self.log_feed.setStyleSheet("background-color: #020617; color: #94a3b8; border-radius: 8px;")
-        feed_layout.addWidget(self.log_feed)
-        splitter.addWidget(feed_container)
+    def set_active_button(self, name):
+        for btn_name, btn in self.nav_buttons.items():
+            if btn_name == name:
+                btn.setObjectName("active")
+            else:
+                btn.setObjectName("")
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
 
-        self.content_layout.addWidget(splitter)
+    def show_dashboard(self):
+        self.stack.setCurrentWidget(self.page_dash)
+        self.set_active_button("Dashboard")
 
-    def toggle_simulation(self):
-        if self.simulator and self.simulator.running:
-            self.simulator.stop()
-            self.simulator = None
-            self.btn_toggle_sim.setText("Start Simulation")
-            self.sim_status.setText("Simulation: OFF")
-            self.sim_status.setStyleSheet("color: #94a3b8;")
-        else:
+    def show_live_logs(self):
+        self.stack.setCurrentWidget(self.page_live)
+        self.set_active_button("Live Logs")
+
+    def show_history(self):
+        self.page_hist.refresh_data()
+        self.stack.setCurrentWidget(self.page_hist)
+        self.set_active_button("Threat History")
+
+    def show_simulation(self):
+        self.stack.setCurrentWidget(self.page_sim)
+        self.set_active_button("Simulation Control")
+
+    def handle_simulation_toggle(self, start):
+        if start:
             self.simulator = LogSimulator(target_file="data/sim.log", interval=0.5)
             self.simulator.start()
-            self.btn_toggle_sim.setText("Stop Simulation")
-            self.sim_status.setText("Simulation: RUNNING")
-            self.sim_status.setStyleSheet("color: #22c55e; font-weight: bold;")
+        else:
+            if self.simulator:
+                self.simulator.stop()
+                self.simulator = None
 
     def process_live_log(self, line, source):
         self.log_received.emit(line, source)
@@ -181,21 +178,16 @@ class NeuralGuardianDashboard(QMainWindow):
         self.window_analyzed.emit(sequence, source, result)
 
     @Slot(str, str)
-    def update_live_feed(self, line, source):
+    def update_log_feeds(self, line, source):
         self.total_logs += 1
-        self.card_logs.set_value(self.total_logs)
+        self.page_dash.update_stats(self.total_logs, self.total_anomalies)
         
         timestamp = time.strftime('%H:%M:%S')
         source_name = os.path.basename(source)
         item_text = f"[{timestamp}] [{source_name}] {line}"
         
-        self.log_feed.insertItem(0, item_text)
-        if self.log_feed.count() > 100:
-            self.log_feed.takeItem(100)
-            
-        # Subtle highlight for lines that look like attacks even before analysis
-        if any(word in line.lower() for word in ["fail", "error", "attack", "unauthorized"]):
-            self.log_feed.item(0).setForeground(QColor("#f87171"))
+        # Update Live Logs Page
+        self.page_live.add_log(item_text)
 
     @Slot(list, str, dict)
     def on_anomaly_detected(self, sequence, source_path, result):
@@ -203,31 +195,13 @@ class NeuralGuardianDashboard(QMainWindow):
 
         if result["is_anomaly"]:
             self.total_anomalies += 1
-            self.card_threats.set_value(self.total_anomalies)
+            self.page_dash.update_stats(self.total_logs, self.total_anomalies)
             self.status_text.setText("SYSTEM: THREAT DETECTED")
             self.status_text.setStyleSheet("color: #ef4444; font-weight: bold;")
             
-            # Add to table
-            self.table.insertRow(0)
-            self.table.setItem(0, 0, QTableWidgetItem(time.strftime('%H:%M:%S')))
-            self.table.setItem(0, 1, QTableWidgetItem("localhost"))
-            self.table.setItem(0, 2, QTableWidgetItem(result.get("attack_type", "Anomaly")))
-            self.table.setItem(0, 3, QTableWidgetItem(f"{result['score']*100:.1f}%"))
-            self.table.setItem(0, 4, QTableWidgetItem(result.get("mitre_technique", "T1059")))
-            self.table.setItem(0, 5, QTableWidgetItem(result.get("reason", "LogBERT mismatch")))
-            
-            severity = result["severity"]
-            sev_item = QTableWidgetItem(severity)
-            if severity == "Critical": sev_item.setForeground(QColor("#ef4444"))
-            elif severity == "High": sev_item.setForeground(QColor("#f97316"))
-            else: sev_item.setForeground(QColor("#eab308"))
-            self.table.setItem(0, 6, sev_item)
-            
-            # Highlight the anomaly in the live feed too
-            alert_msg = f"!!! ANOMALY DETECTED in window of {len(sequence)} logs !!!"
-            self.log_feed.insertItem(0, alert_msg)
-            self.log_feed.item(0).setForeground(QColor("#ef4444"))
-            self.log_feed.item(0).setBackground(QColor("#450a0a"))
+            # Add to Live Logs with Alert styling
+            alert_msg = f"!!! ANOMALY DETECTED: {result.get('attack_type')} !!!"
+            self.page_live.add_log(alert_msg, is_alert=True)
             
             # Save to DB
             self.db.insert_anomaly(
@@ -236,11 +210,15 @@ class NeuralGuardianDashboard(QMainWindow):
                 result["severity"], result.get("attack_type", "Neural Anomaly"), 
                 result.get("reason", "LogBERT mismatch detected")
             )
+            
+            # If on history page, refresh
+            if self.stack.currentWidget() == self.page_hist:
+                self.page_hist.refresh_data()
         else:
-            # Revert status if things are calm
             if self.total_anomalies > 0 and self.total_logs % 50 == 0:
                 self.status_text.setText("SYSTEM: ACTIVE")
                 self.status_text.setStyleSheet("color: #22c55e; font-weight: bold;")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
