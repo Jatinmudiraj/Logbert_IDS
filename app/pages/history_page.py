@@ -8,36 +8,77 @@ class ThreatHistoryPage(QWidget):
         super().__init__()
         self.db = db
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(25, 25, 25, 25)
+        layout.setSpacing(15)
         
-        # Header
-        header_layout = QHBoxLayout()
-        header_label = QLabel("Neural Threat History")
-        header_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #f8fafc;")
+        # Professional Header
+        header_frame = QFrame()
+        header_frame.setStyleSheet("background: #1e293b; border-radius: 12px; border: 1px solid #334155;")
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(15, 10, 15, 10)
+        
+        header_label = QLabel("NEURAL THREAT ARCHIVE")
+        header_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #f8fafc;")
         header_layout.addWidget(header_label)
+        
         header_layout.addStretch()
         
-        self.btn_refresh = QPushButton("🔄 Refresh History")
-        self.btn_refresh.setStyleSheet("background: #2563eb; padding: 8px 15px; border-radius: 6px;")
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Filter history...")
+        self.search_bar.setFixedWidth(250)
+        self.search_bar.setStyleSheet("padding: 8px; border-radius: 6px; background: #0f172a; border: 1px solid #334155;")
+        self.search_bar.textChanged.connect(self.filter_table)
+        header_layout.addWidget(self.search_bar)
+        
+        self.btn_refresh = QPushButton("🔄 Sync Database")
+        self.btn_refresh.setCursor(Qt.PointingHandCursor)
+        self.btn_refresh.setStyleSheet("""
+            QPushButton {
+                background: #2563eb; color: white; padding: 10px 20px; 
+                border-radius: 8px; font-weight: bold;
+            }
+            QPushButton:hover { background: #1d4ed8; }
+        """)
         self.btn_refresh.clicked.connect(self.refresh_data)
         header_layout.addWidget(self.btn_refresh)
         
-        layout.addLayout(header_layout)
+        layout.addWidget(header_frame)
         
-        # Table
+        # Advanced Table
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(["Timestamp", "Host", "Attack Type", "Score", "Severity", "MITRE", "Source"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setAlternatingRowColors(True)
         self.table.setStyleSheet("""
             QTableWidget {
-                background-color: #111827;
+                background-color: #0f172a;
+                alternate-background-color: #1e293b;
                 border-radius: 12px;
                 border: 1px solid #1e293b;
+                color: #e2e8f0;
+            }
+            QHeaderView::section {
+                background-color: #334155;
+                color: #f8fafc;
+                padding: 12px;
+                font-weight: bold;
+                border: none;
             }
         """)
         layout.addWidget(self.table)
         
         self.refresh_data()
+
+    def filter_table(self, text):
+        for i in range(self.table.rowCount()):
+            match = False
+            for j in range(self.table.columnCount()):
+                item = self.table.item(i, j)
+                if item and text.lower() in item.text().lower():
+                    match = True
+                    break
+            self.table.setRowHidden(i, not match)
+
 
     def refresh_data(self):
         self.table.setRowCount(0)

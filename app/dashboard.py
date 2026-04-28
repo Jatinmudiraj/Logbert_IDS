@@ -186,7 +186,10 @@ class NeuralGuardianDashboard(QMainWindow):
         source_name = os.path.basename(source)
         item_text = f"[{timestamp}] [{source_name}] {line}"
         
-        # Update Live Logs Page
+        # Update Dashboard Split-view
+        self.page_dash.add_live_log(item_text)
+        
+        # Update Dedicated Live Logs Page
         self.page_live.add_log(item_text)
 
     @Slot(list, str, dict)
@@ -199,8 +202,14 @@ class NeuralGuardianDashboard(QMainWindow):
             self.status_text.setText("SYSTEM: THREAT DETECTED")
             self.status_text.setStyleSheet("color: #ef4444; font-weight: bold;")
             
-            # Add to Live Logs with Alert styling
+            # Update Dashboard Table
+            self.page_dash.add_anomaly_to_table(result)
+            
+            # Update Dashboard Live Feed with Alert
             alert_msg = f"!!! ANOMALY DETECTED: {result.get('attack_type')} !!!"
+            self.page_dash.add_live_log(alert_msg, is_alert=True)
+            
+            # Update Dedicated Live Logs Page with Alert
             self.page_live.add_log(alert_msg, is_alert=True)
             
             # Save to DB
@@ -218,6 +227,7 @@ class NeuralGuardianDashboard(QMainWindow):
             if self.total_anomalies > 0 and self.total_logs % 50 == 0:
                 self.status_text.setText("SYSTEM: ACTIVE")
                 self.status_text.setStyleSheet("color: #22c55e; font-weight: bold;")
+
 
 
 if __name__ == "__main__":

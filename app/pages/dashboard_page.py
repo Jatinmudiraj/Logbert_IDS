@@ -1,6 +1,11 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGridLayout
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, 
+                             QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, 
+                             QListWidget, QSplitter)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from app.widgets.stat_card import StatCard
+import time
+import os
 
 class DashboardPage(QWidget):
     def __init__(self):
@@ -8,48 +13,83 @@ class DashboardPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         
-        # Header
-        header = QLabel("Neural Guardian | Overview")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #f8fafc; margin-bottom: 20px;")
-        layout.addWidget(header)
-        
-        # Stats Grid
-        stats_layout = QGridLayout()
+        # Header Row
+        header = QHBoxLayout()
+        self.page_title = QLabel("Threat Detection Overview")
+        self.page_title.setStyleSheet("font-size: 24px; font-weight: bold; color: #f8fafc;")
+        header.addWidget(self.page_title)
+        header.addStretch()
+        layout.addLayout(header)
+
+        # Stats Cards Row
+        stats_row = QHBoxLayout()
         self.card_logs = StatCard("Logs Processed", "0", "#3b82f6")
-        self.card_threats = StatCard("Total Anomalies", "0", "#ef4444")
-        self.card_uptime = StatCard("System Uptime", "00:00:00", "#22c55e")
-        self.card_conf = StatCard("Neural Confidence", "99.8%", "#6366f1")
+        self.card_threats = StatCard("Anomalies", "0", "#ef4444")
+        self.card_conf = StatCard("Neural Confidence", "99.8%", "#22c55e")
+        self.card_latency = StatCard("Analysis Latency", "8ms", "#eab308")
         
-        stats_layout.addWidget(self.card_logs, 0, 0)
-        stats_layout.addWidget(self.card_threats, 0, 1)
-        stats_layout.addWidget(self.card_uptime, 1, 0)
-        stats_layout.addWidget(self.card_conf, 1, 1)
-        layout.addLayout(stats_layout)
+        stats_row.addWidget(self.card_logs)
+        stats_row.addWidget(self.card_threats)
+        stats_row.addWidget(self.card_conf)
+        stats_row.addWidget(self.card_latency)
+        layout.addLayout(stats_row)
+
+        # Splitter for Table and Live Feed
+        splitter = QSplitter(Qt.Vertical)
         
-        # Bottom area: Health Status
-        health_frame = QFrame()
-        health_frame.setStyleSheet("background-color: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155;")
-        health_layout = QVBoxLayout(health_frame)
+        # Detection Table
+        table_container = QWidget()
+        table_layout = QVBoxLayout(table_container)
+        table_label = QLabel("DETECTED ANOMALIES (LogBERT Windows)")
+        table_label.setStyleSheet("color: #94a3b8; font-weight: bold; margin-top: 10px;")
+        table_layout.addWidget(table_label)
         
-        health_title = QLabel("System Health & Neural Engine Status")
-        health_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #94a3b8;")
-        health_layout.addWidget(health_title)
+        self.table = QTableWidget(0, 7)
+        self.table.setHorizontalHeaderLabels(["Timestamp", "Host", "Attack Type", "Score", "MITRE", "Reason", "Severity"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setStyleSheet("QTableWidget { border-radius: 8px; background-color: #111827; }")
+        table_layout.addWidget(self.table)
+        splitter.addWidget(table_container)
+
+        # Live Feed
+        feed_container = QWidget()
+        feed_layout = QVBoxLayout(feed_container)
+        feed_label = QLabel("LIVE TELEMETRY STREAM")
+        feed_label.setStyleSheet("color: #94a3b8; font-weight: bold; margin-top: 10px;")
+        feed_layout.addWidget(feed_label)
         
-        self.engine_status = QLabel("● LogBERT Model: LOADED (v1.2.0)")
-        self.engine_status.setStyleSheet("color: #22c55e; margin-top: 10px;")
-        health_layout.addWidget(self.engine_status)
-        
-        self.db_status = QLabel("● Database Connection: STABLE")
-        self.db_status.setStyleSheet("color: #22c55e;")
-        health_layout.addWidget(self.db_status)
-        
-        self.monitor_status = QLabel("● Log Monitors: ACTIVE (2 sources)")
-        self.monitor_status.setStyleSheet("color: #22c55e;")
-        health_layout.addWidget(self.monitor_status)
-        
-        layout.addWidget(health_frame)
-        layout.addStretch()
+        self.log_feed = QListWidget()
+        self.log_feed.setStyleSheet("background-color: #020617; color: #94a3b8; border-radius: 8px;")
+        feed_layout.addWidget(self.log_feed)
+        splitter.addWidget(feed_container)
+
+        layout.addWidget(splitter)
 
     def update_stats(self, logs, threats):
         self.card_logs.set_value(logs)
         self.card_threats.set_value(threats)
+
+    def add_live_log(self, text, is_alert=False):
+        self.log_feed.insertItem(0, text)
+        if is_alert:
+            self.log_feed.item(0).setForeground(QColor("#ef4444"))
+            self.log_feed.item(0).setBackground(QColor("#450a0a"))
+        if self.log_feed.count() > 100:
+            self.log_feed.takeItem(100)
+
+    def add_anomaly_to_table(self, result):
+        self.table.insertRow(0)
+        self.table.setItem(0, 0, QTableWidgetItem(time.strftime('%H:%M:%S')))
+        self.table.setItem(0, 1, QTableWidgetItem("localhost"))
+        self.table.setItem(0, 2, QTableWidgetItem(result.get("attack_type", "Anomaly")))
+        self.table.setItem(0, 3, QTableWidgetItem(f"{result['score']*100:.1f}%"))
+        self.table.setItem(0, 4, QTableWidgetItem(result.get("mitre_technique", "T1059")))
+        self.table.setItem(0, 5, QTableWidgetItem(result.get("reason", "LogBERT mismatch")))
+        
+        severity = result["severity"]
+        sev_item = QTableWidgetItem(severity)
+        if severity == "Critical": sev_item.setForeground(QColor("#ef4444"))
+        elif severity == "High": sev_item.setForeground(QColor("#f97316"))
+        else: sev_item.setForeground(QColor("#eab308"))
+        self.table.setItem(0, 6, sev_item)
+
